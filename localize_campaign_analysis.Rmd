@@ -1,0 +1,176 @@
+---
+title: "Localize Campaign Analysis"
+output: html_notebook
+---
+
+This is my analysis of Localize Marketing Campaigns, per the overview provided in the pdf instructions
+
+### Read in the data
+```{r}
+
+library(tidyverse)
+library(googlesheets4)
+
+
+localize_user_sessions <- googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1kngeraxAiD_0j6MOO5vgVoNoUnU5UVEwfAyJBhDnFTk/edit#gid=0",range="user_sessions")
+
+localize_user_sources<-googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1kngeraxAiD_0j6MOO5vgVoNoUnU5UVEwfAyJBhDnFTk/edit#gid=0",range="user_sources")
+
+localize_campaign_costs<-googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1kngeraxAiD_0j6MOO5vgVoNoUnU5UVEwfAyJBhDnFTk/edit#gid=0",range="campaign_costs")
+
+
+skimr::skim(localize_user_sessions)
+
+```
+
+```{r}
+
+user_summary<-localize_user_sessions %>% 
+  group_by(user_id) %>% 
+  summarise(sessions=n(),
+            days_visited=n_distinct(date),
+            first_visit=min(date),
+            latest_visit=max(date),
+            time_between_first_last=difftime(latest_visit,first_visit,units="days")) 
+
+user_summary%>% 
+  ggplot(.,aes(sessions)) +
+  geom_histogram(col="#003A42",
+                 fill="#faf5f0",
+                 binwidth = 1) +
+  labs(title="Sessions per User",
+        x ="Sessions", y = "Users")
+
+```
+
+
+```{r}
+
+user_summary%>% 
+  filter(sessions>1) %>% 
+  ggplot(.,aes(time_between_first_last)) +
+  geom_histogram(col="#003A42",
+                 fill="#faf5f0",
+                 binwidth = 1) +
+  labs(title="Days Between First and Last Session",
+        x ="Days", y = "Users")
+
+
+
+```
+
+Let's take a look at our secondary datasource,
+
+```{r}
+
+skimr::skim(localize_user_sources)
+
+
+localize_user_sources %>% 
+  group_by(campaign_source) %>% 
+  summarise(users=n_distinct(user_id),
+            occurences=n())
+
+```
+
+```{r}
+
+skimr::skim(localize_campaign_costs)
+
+```
+
+
+
+A cursory overview of the campaign costs and user_sources data shows a mismatch of a few campaign names.  _For the puroses of this exercise, I wil assume the instagram and google campaigns are intended to be referencing the same campaigns._  I'm going to add a new column to our campaign costs dataset to account for the name differences
+
+```{r}
+
+localize_campaign_costs_edited <- localize_campaign_costs %>% 
+  mutate(campaign_edited=case_when (
+    campaign=='google_adwords'~'google_1',
+    campaign=='instagram_thx'~'insta_1',
+    TRUE~campaign
+  ),
+  ad_platform=case_when(
+    grepl('google',campaign,ignore.case = TRUE)~'Google',
+    grepl('instagram',campaign,ignore.case = TRUE)~'Instagram',
+    grepl('fb_',campaign,ignore.case =TRUE)~'Facebook',
+    TRUE~'unknown'
+  ))
+
+
+```
+
+
+
+
+```{r}
+
+#let's join the campaign source and cost data to the dataset
+
+localize_session_full<-localize_user_sessions %>% 
+  left_join(localize_user_sources) %>% 
+  left_join(localize_campaign_costs_edited,by=c("campaign_source"="campaign_edited")) %>% 
+  select(-is_session,-campaign_source) 
+
+localize_session_full %>% 
+  group_by(campaign) %>% 
+  summarise(users=n_distinct(user_id),
+            sessions=n(),
+            spend=sum(ppu),
+            spu=sessions/users)
+
+```
+
+Let's assume the cost is associated at the User, not click level - what does that look like for a cost per session then
+
+```{r}
+
+
+#this is sort of what we want, but don't necessarily want to lose the campaign name for each row
+localize_session_full<-localize_user_sessions %>% 
+  arrange(date) %>% 
+  group_by(user_id) %>% 
+  mutate(join_key=row_number()) %>% 
+  left_join(localize_user_sources) %>% 
+  left_join(localize_campaign_costs_edited %>% 
+              mutate(join_key=1),by=c("campaign_source"="campaign_edited","join_key"="join_key")) %>% 
+  select(-is_session,-campaign_source) 
+
+
+#this is a really lazy way to do this but will work for our purposes
+localize_session_full<-localize_user_sessions %>% 
+  arrange(user_id,date) %>% 
+  group_by(user_id) %>% 
+  mutate(sess_num=row_number()) %>% 
+  left_join(localize_user_sources) %>% 
+  left_join(localize_campaign_costs_edited,by=c("campaign_source"="campaign_edited")) %>% 
+  mutate(ppu=ifelse(sess_num==1,ppu,0)) %>% 
+  select(-is_session,-campaign_source) 
+
+
+localize_session_full %>% 
+  group_by(campaign) %>% 
+  summarise(users=n_distinct(user_id),
+            sessions=n(),
+            spend=sum(ppu),
+            spu=sessions/users,
+            cost_per_sess=spend/sessions)
+
+
+
+```
+
+```{r}
+
+localize_session_full %>% 
+  group_by(date, campaign) %>% 
+  summarise(sessions=n()) %>% 
+  ggplot(aes(x=date, y=sessions, group=campaign,colour=campaign)) +
+  geom_line()+
+  labs(title="Weekly Accumulating Leads by Lifecycle Stage", x="Week Starting", y="Count of Leads") +
+    theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+
+
+```
+
