@@ -1,15 +1,101 @@
 ---
 title: "Localize Campaign Analysis"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
-This is my analysis of Localize Marketing Campaigns, per the overview provided in the pdf instructions
+This is an analysis of Localize Marketing Campaigns, per the overview provided in the pdf instructions provided  [here](https://github.com/gottalottasoul/localize_hw/blob/main/Localize%20-%20Home%20Assignment%2C%20Senior%20BA%20Analyst.pdf). The full source code for this analysis can be found on github as well, in [this repository](https://github.com/gottalottasoul/localize_hw). Please feel free to reach out to me with any questions as needed.
 
-### Read in the data
-```{r}
+
+## Caveat Emptor
+
+Before providing my analysis of the provided data, I would first call attention to what data is *not* provided. In a real world scenario, I would be hesitant to provide any analysis that's primary metric was focused on visits/sessions, particularly as it relates to paid channels.
+
+A few questions or additional pieces of data I would consider asking for to provide a fuller analysis would be:
+
+1. Campaign Name
+2. Raw Spend data per date per source/campaign
+3. Additional traffic data from non-paid sources
+4. An additional Key goal metric to accompany visit (conversion, lead submission, etc.)
+
+## Executive Summary
+
+Looking at the performance of 4 campaigns across 3 ad platforms, there are indications that the latest Facebook campaign is the best performing, but the sample size is still relatively small and needs more time to run.  Instagram also shows some strong indicators, but there are potential anomalies in the data that warrante further investigation before any defnitive conclusions are drawn.
+
+## Data Overview
+
+The primary dataset (user sessions) doesn't appear to be missing any data or have any egregious data errors or outliers.
+
+```{r setup, echo=FALSE, message=FALSE,results='asis'}
 
 library(tidyverse)
 library(googlesheets4)
+library(skimr)
+
+
+#make sure our charts look nice
+
+my_theme <-
+function() {
+  
+  # Generate the colors for the chart procedurally with RColorBrewer
+  palette <- RColorBrewer::brewer.pal("Greys", n=9)
+  color.background = palette[2]
+  color.grid.major = palette[3]
+  color.axis.text = palette[6]
+  color.axis.title = palette[7]
+  color.title = palette[9]
+  
+  #set our font
+  my_font_headline <- "Arial"
+  my_font_body <- "Times New Roman"
+  
+  
+  # Begin construction of chart
+  theme_bw(base_size=9) +
+    # Set the entire chart region to a light gray color
+    theme(panel.background=element_rect(fill=color.background, color=color.background)) +
+    theme(plot.background=element_rect(fill=color.background, color=color.background)) +
+    theme(panel.border=element_rect(color=color.background)) +
+    
+    # Format the grid
+    #    theme(panel.grid.major=element_line(color=color.grid.major,size=.25)) +
+    theme(panel.grid.major.x = element_blank() ,
+          # explicitly set the horizontal lines (or they will disappear too)
+          panel.grid.major.y = element_line( size=.1, color="black" )) +
+    theme(panel.grid.minor=element_blank()) +
+    theme(axis.ticks=element_blank()) +
+    
+    # Format the legend, but hide by default
+    theme(legend.position="none") +
+    theme(legend.background = element_rect(fill=color.background)) +
+    #    theme(legend.text = element_text(size=7,color=color.axis.title)) +
+    theme(legend.text = element_text(size=5,family=my_font_body,color=color.axis.title)) +
+    
+    # Set title and axis labels, and format these and tick marks
+    #    theme(plot.title=element_text(color=color.title, size=12, vjust=1.25,hjust = 0.5)) +
+    theme(plot.title=element_text(color=color.title, family=my_font_headline, size=8, vjust=1.25,hjust = 0.5)) +
+    theme(plot.subtitle=element_text(color=color.title,family=my_font_headline, size=10, vjust=1.25,hjust = 0.5)) +
+    theme(axis.text.x=element_text(family=my_font_body,size=7,color=color.axis.text)) +
+    theme(axis.text.y=element_text(family=my_font_body,size=7,color=color.axis.text)) +
+    theme(axis.title.x=element_text(family=my_font_body,size=8,color=color.axis.title, vjust=0)) +
+    theme(axis.title.y=element_text(family=my_font_body,size=8,color=color.axis.title, vjust=1.25)) +
+    # Plot margins
+    theme(plot.margin = unit(c(0.35, 0.2, 0.3, 0.35), "cm"))
+}
+
+
+#color text for emphasis
+colFmt = function(x,color){
+  outputFormat = knitr::opts_knit$get("rmarkdown.pandoc.to")
+  if(outputFormat == 'latex')
+    paste("\\textcolor{",color,"}{",x,"}",sep="")
+  else if(outputFormat == 'html')
+    paste("<font color='",color,"'>",x,"</font>",sep="")
+  else
+    x
+}
 
 
 localize_user_sessions <- googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1kngeraxAiD_0j6MOO5vgVoNoUnU5UVEwfAyJBhDnFTk/edit#gid=0",range="user_sessions")
@@ -23,7 +109,28 @@ skimr::skim(localize_user_sessions)
 
 ```
 
-```{r}
+### EDA
+
+A few quick charts to get a sense of the shape and magnitude of the data.
+
+```{r summary, echo=FALSE, message=FALSE,results='asis'}
+
+
+
+localize_user_sessions %>% 
+  ggplot(.,aes(date)) +
+  geom_bar(col="#003A42",
+           fill="#faf5f0") +
+   my_theme() +
+  labs(title="Sessions per Day",
+        x ="Date", y = "Sessions")
+
+```
+
+
+
+```{r summary 2, echo=FALSE, message=FALSE,results='asis'}
+
 
 user_summary<-localize_user_sessions %>% 
   group_by(user_id) %>% 
@@ -38,13 +145,14 @@ user_summary%>%
   geom_histogram(col="#003A42",
                  fill="#faf5f0",
                  binwidth = 1) +
+  my_theme() +
   labs(title="Sessions per User",
         x ="Sessions", y = "Users")
 
 ```
 
 
-```{r}
+```{r summary 3, echo=FALSE, message=FALSE,results='asis'}
 
 user_summary%>% 
   filter(sessions>1) %>% 
@@ -52,6 +160,7 @@ user_summary%>%
   geom_histogram(col="#003A42",
                  fill="#faf5f0",
                  binwidth = 1) +
+  my_theme() +
   labs(title="Days Between First and Last Session",
         x ="Days", y = "Users")
 
@@ -59,9 +168,28 @@ user_summary%>%
 
 ```
 
-Let's take a look at our secondary datasource,
+Let's take a closer look at the distribution of sessions per day
 
-```{r}
+```{r summary 4, echo=FALSE, message=FALSE,results='asis'}
+
+
+localize_user_sessions %>% 
+  group_by(date,is_session) %>% 
+  summarise(sessions=n()) %>% 
+  ggplot(aes(is_session,sessions)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 1)+
+  my_theme() +
+  labs(title="Sessions per Day Distribution",
+        x ="", y = "Sessions")
+```
+
+It is interesting to see the peaks in late November/early December technically classified as outliers using standard definitions (_1.5x upper/lower quantile ranges_).  Given the limited amount of data (as well as relatively small ranges), I would not make anything of this yet but would revisit it as we continue to enrich our dataset.
+
+### Data Cleansing
+
+Now that we've examined the primary dataset, a quick overview of the ancillary data sources:
+
+```{r summary sources, echo=FALSE, message=FALSE,results='asis'}
 
 skimr::skim(localize_user_sources)
 
@@ -69,21 +197,20 @@ skimr::skim(localize_user_sources)
 localize_user_sources %>% 
   group_by(campaign_source) %>% 
   summarise(users=n_distinct(user_id),
-            occurences=n())
+            occurrences=n())
 
 ```
 
-```{r}
+```{r summary costs, echo=FALSE, message=FALSE,results='asis'}
 
-skimr::skim(localize_campaign_costs)
+localize_campaign_costs
 
 ```
 
+A cursory overview of the campaign costs and user_sources data shows a mismatch of a few campaign names. `r colFmt("For the purposes of this exercise, I will assume the instagram and google campaigns are intended to be referencing the same campaigns",'red')`. I'm going to add a new column to our campaign costs dataset to account for the name differences.
 
+```{r campaign munge, echo=FALSE, message=FALSE,results='asis'}
 
-A cursory overview of the campaign costs and user_sources data shows a mismatch of a few campaign names.  _For the puroses of this exercise, I wil assume the instagram and google campaigns are intended to be referencing the same campaigns._  I'm going to add a new column to our campaign costs dataset to account for the name differences
-
-```{r}
 
 localize_campaign_costs_edited <- localize_campaign_costs %>% 
   mutate(campaign_edited=case_when (
@@ -101,10 +228,10 @@ localize_campaign_costs_edited <- localize_campaign_costs %>%
 
 ```
 
+Now we can join our 3 datasets so we have source names and average click costs sitting along side individual sessions:
 
 
-
-```{r}
+```{r full dataset, echo=FALSE, message=FALSE,results='asis'}
 
 #let's join the campaign source and cost data to the dataset
 
@@ -117,60 +244,152 @@ localize_session_full %>%
   group_by(campaign) %>% 
   summarise(users=n_distinct(user_id),
             sessions=n(),
-            spend=sum(ppu),
-            spu=sessions/users)
+            sess_per_user=sessions/users)
+
 
 ```
 
-Let's assume the cost is associated at the User, not click level - what does that look like for a cost per session then
-
-```{r}
+We can see there are a small subset of users who are not associated with a campaign, and have an abnormally high average of Sessions Per User
 
 
-#this is sort of what we want, but don't necessarily want to lose the campaign name for each row
-localize_session_full<-localize_user_sessions %>% 
-  arrange(date) %>% 
-  group_by(user_id) %>% 
-  mutate(join_key=row_number()) %>% 
-  left_join(localize_user_sources) %>% 
-  left_join(localize_campaign_costs_edited %>% 
-              mutate(join_key=1),by=c("campaign_source"="campaign_edited","join_key"="join_key")) %>% 
-  select(-is_session,-campaign_source) 
+```{r missing campaign, echo=FALSE, message=FALSE,results='asis'}
 
-
-#this is a really lazy way to do this but will work for our purposes
-localize_session_full<-localize_user_sessions %>% 
-  arrange(user_id,date) %>% 
-  group_by(user_id) %>% 
-  mutate(sess_num=row_number()) %>% 
+localize_user_sessions %>% 
   left_join(localize_user_sources) %>% 
   left_join(localize_campaign_costs_edited,by=c("campaign_source"="campaign_edited")) %>% 
-  mutate(ppu=ifelse(sess_num==1,ppu,0)) %>% 
-  select(-is_session,-campaign_source) 
-
-
-localize_session_full %>% 
-  group_by(campaign) %>% 
-  summarise(users=n_distinct(user_id),
-            sessions=n(),
-            spend=sum(ppu),
-            spu=sessions/users,
-            cost_per_sess=spend/sessions)
-
-
+  select(-is_session,-campaign_source) %>% 
+  filter(is.na(campaign)) %>% 
+  select(user_id) %>% 
+  unique()
 
 ```
+These 3 user_ids are appended with a '_tst' suffix. `r colFmt("I will assume this is a designation of test users and will exclude them from our final dataset",'red')`. Now that we have a scrubbed full dataset, it's ready for analysis.
 
-```{r}
+## Analysis
+
+To start, let's take a look at sessions by campaign by day.
+
+```{r analysis 1, echo=FALSE, message=FALSE,results='asis'}
+
 
 localize_session_full %>% 
   group_by(date, campaign) %>% 
   summarise(sessions=n()) %>% 
   ggplot(aes(x=date, y=sessions, group=campaign,colour=campaign)) +
   geom_line()+
-  labs(title="Weekly Accumulating Leads by Lifecycle Stage", x="Week Starting", y="Count of Leads") +
-    theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
+  my_theme() +
+  labs(title="Daily Sessions by Campaign", x="Date", y="Count of Sessions") +
+  theme(legend.title=element_blank(),legend.text=element_text(size=5),legend.position='bottom') 
 
 
 ```
+<p>
+From this view, a couple of things stand out.  First, it would appear that the 2 Facebook campaigns are not independent of one another; but rather one is a continuation of the other.  It warrants further investigation to understand the cost discrepancy between the two (if one is, in fact, a relaunch of the original).  Even more conspicuous is the 'performance' of the instagram campaign. Given the limitations of our dataset, its hard to place the performance of Instagram in context.  It could be a big ad buy, or juicing an already viral post with boosting, that is driving the one day spike.   
+
+What is undeniable, however, is that instagram users are 'stickier' than other channels.  As seen in the following chart and table, sessions per unique user for Instagram far exceed our other two ad platforms.  
+<p>
+
+```{r analysis 2, echo=FALSE, message=FALSE,results='asis'}
+
+localize_session_full %>% 
+  drop_na() %>% 
+  group_by(ad_platform,user_id) %>% 
+  summarise(sessions=n()) %>% 
+  ggplot(aes(ad_platform,sessions)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 1)+
+  my_theme() +
+  labs(title="Sessions/User by Ad Platform",
+        x ="Platform", y = "Sessions")
+
+```
+
+```{r analysis 3, echo=FALSE, message=FALSE,results='asis'}
+
+localize_session_full %>% 
+  group_by(campaign) %>% 
+  summarise(users=n_distinct(user_id),
+            sessions=n(),
+            spend=sum(ppu),
+            sessions_per_user=sessions/users)
+
+```
+
+_To this point, i have been assuming ppu is 'Price Per (Ad) Unit'.  If we tweak this and assume ppu is in fact Price Per User, so that it is a normalized cost across user_id, we can then calculate a cost per session._
+
+`r colFmt("In lieu of another datapoint to identify a conversion, we will use repeat users as a proxy for value and count returning visitors as our 'conversion 'metric' for this portion.",'red')`
+
+
+```{r alternative costs, echo=FALSE, message=FALSE,results='asis'}
+
+#this is sort of what we want, but don't necessarily want to lose the campaign name for each row
+localize_session_full_alternate_cost<-localize_user_sessions %>% 
+  arrange(date) %>% 
+  group_by(user_id) %>% 
+  mutate(join_key=row_number()) %>% 
+  left_join(localize_user_sources) %>% 
+  left_join(localize_campaign_costs_edited %>% 
+              mutate(join_key=1),by=c("campaign_source"="campaign_edited","join_key"="join_key")) %>% 
+  select(-is_session,-campaign_source) %>% 
+  drop_na()
+
+
+#this is a really lazy way to do this but will work for our purposes
+localize_session_full_alternate_cost<-localize_user_sessions %>% 
+  arrange(user_id,date) %>% 
+  group_by(user_id) %>% 
+  mutate(sess_num=row_number()) %>% 
+  left_join(localize_user_sources) %>% 
+  left_join(localize_campaign_costs_edited,by=c("campaign_source"="campaign_edited")) %>% 
+  mutate(ppu=ifelse(sess_num==1,ppu,0)) %>% 
+  select(-is_session,-campaign_source) %>% 
+  drop_na()
+
+
+localize_session_full_alternate_cost %>% 
+  group_by(user_id,campaign) %>% 
+  summarise(sessions=n(),
+            cost=sum(ppu)) %>% 
+  mutate(converter=ifelse(sessions>1,1,0)) %>% 
+  group_by(campaign) %>% 
+  summarise(users=n_distinct(user_id),
+            sessions=sum(sessions),
+            spend=scales::dollar(sum(cost)), 
+            converters=sum(converter),
+            conversion_rate=scales::percent(converters/users),
+            sessions_per_user=sessions/users,
+            cost_per_sess=scales::dollar(sum(cost)/sessions),
+            cost_per_converter=scales::dollar(sum(cost)/converters)) %>% 
+  gt::gt()
+
+
+
+```
+
+<p>
+
+Given this new framing, a picture beings to emerge.  The new Facebook campaign looks like it is performing across all key metrics.  It has the highest conversion rate and lowest cost per conversion, making it an ideal mix of performance.  I would also take a moment to caution that the numbers are still particularly small for this campaign (less than 100 sessions), so it warrants continued observation (we can run a quick test and see that our sample size is, in fact, too small to declaratively say fb_2 outperforms instagram from a conversion perspective).
+
+<p>
+
+```{r chitest, echo=FALSE, warning=FALSE, message=FALSE,results='asis'}
+
+M <- as.table(rbind(c(22,129), c(5,25)))
+dimnames(M) <- list(gender = c("non-converter", "converter"),
+                    party = c("fb_2","instagram"))
+fb_v_insta <- chisq.test(M)
+
+fb_v_insta
+```
+
+
+
+## Recommendations
+
+Given the above, I would make the following recommendations:
+
+1. Retire the fb_1 campaign
+2. Ramp up spend on the new facebook campaign and reevaluate in 2 weeks to see if current KPIs hold
+3. Further examination of the Instagram campaign to understand the large one day spike and what impact this is having on KPIs
+4. Given results of 2 and/or 3, maintain google ads campaign but potentially shift a greater share of spend to the two higher performing campaigns.
+
 
